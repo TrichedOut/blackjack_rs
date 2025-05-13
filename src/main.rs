@@ -1,10 +1,10 @@
 mod game;
-use game::new_game;
 
 mod cards;
 mod util;
 
 use std::process::exit;
+use game::game::Game;
 use prompted::input;
 
 
@@ -27,7 +27,7 @@ fn get_settings() {
         hand_count = hands.parse().unwrap_or(0);
     }
 
-    new_game(deck_count, hand_count);
+    Game::new(deck_count, hand_count, 0).play();
 }
 
 fn main() {
