@@ -1,4 +1,4 @@
-use std::{fmt::Display, slice::Iter};
+use std::fmt::Display;
 
 use crate::util::util::format_vec_string;
 

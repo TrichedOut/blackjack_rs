@@ -1,7 +1,8 @@
-use super::{card::Card, suit::Suit, card::CardFace};
+use super::{card::{Card, CardFace}, hand::Hand, suit::Suit};
 use rand::prelude::SliceRandom;
 
 pub struct Deck {
+    size: usize,
     pub draw_pile: Pile,
     pub discard_pile: Pile,
 }
@@ -39,23 +40,6 @@ impl Pile {
             p.cards.push(Card::new(val, face, suit));
         }
 
-        // for (i, card) in p.cards.iter_mut().enumerate() {
-        //     let s = (i / 13).try_into().unwrap();
-        //     let suit = Suit::from_val(s);
-        //
-        //     let val = ((i % 13) + 1).try_into().unwrap();
-        //
-        //     let face = match val {
-        //         01 => Some(CardFace::A),
-        //         11 => Some(CardFace::J),
-        //         12 => Some(CardFace::Q),
-        //         13 => Some(CardFace::K),
-        //         __  => None,
-        //     };
-        //
-        //     let _ = card.insert(Card::new(val, face, suit));
-        // }
-
         p
     }
 
@@ -70,15 +54,12 @@ impl Pile {
     pub fn shuffle(&mut self) {
         self.cards.shuffle(&mut rand::rng());
     }
-
-    pub fn count(&self) -> usize {
-        self.cards.len()
-    }
 }
 
 impl Deck {
     pub fn new(decks: usize) -> Deck {
         let mut deck = Deck {
+            size: decks,
             draw_pile: Pile::new_full(decks),
             discard_pile: Pile::new_empty(decks),
         };
@@ -87,15 +68,22 @@ impl Deck {
         deck
     }
 
+    pub fn discard_hand(&mut self, hand: &mut Hand) {
+        loop {
+            match hand.take_card() {
+                Some(c) => self.discard_pile.place(c),
+                None    => break,
+            }
+        }
+    }
+
     pub fn reshuffle(&mut self) {
         self.draw_pile.cards.extend(self.discard_pile.cards.clone());
         self.discard_pile.cards.clear();
         self.draw_pile.shuffle();
     }
 
-    pub fn print(&self) {
-        print!("({}) [", self.draw_pile.count());
-        self.draw_pile.cards.iter().for_each(|card| print!("{card}, "));
-        println!("]");
+    pub fn size(&self) -> usize {
+        self.size
     }
 }
