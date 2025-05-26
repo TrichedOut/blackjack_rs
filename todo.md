@@ -1,4 +1,6 @@
-- [ ] allow player blackjack to continue play for other hands
+- [x] allow player blackjack to continue play for other hands
+- [ ] show dealer hand on score screen
 - [ ] check for balance after game played (prevent underflow balance)
 - [ ] double down
 - [ ] split costs bet
+- [ ] save bal & resets in file

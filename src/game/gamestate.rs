@@ -109,7 +109,7 @@ impl GameState {
 
         let wins = game.play();
 
-        let win_amount = wins * settings.bet_amount as f32;
+        let win_amount = (wins * settings.bet_amount as f32) as i32;
         self.balance += win_amount as usize;
         input!("\nYou won back ${}\nYou now have ${}\n\nEnter to continue...", win_amount, self.balance);
     }

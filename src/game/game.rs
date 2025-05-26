@@ -47,9 +47,9 @@ impl Game {
         }
 
         let wins;
-        match self.blackjack_occured() {
-            (occurred, amount) if occurred => {
-                wins = amount;
+        match self.dealer_blackjack() {
+            (true, amt) => {
+                wins = amt as f32;
             },
             _ => {
                 self.run_player_turns(0);
@@ -66,15 +66,15 @@ impl Game {
         wins
     }
 
-    fn blackjack_occured(&self) -> (bool, f32) {
+    fn dealer_blackjack(&self) -> (bool, usize) {
         let mut blackjacks = Vec::new();
 
-        if self.dealer.filter_value().contains(&21) {
+        if Game::is_blackjack(&self.dealer) {
             blackjacks.push(0);
         }
 
         for (i, hand) in self.hands.iter().enumerate() {
-            if hand.filter_value().contains(&21) {
+            if Game::is_blackjack(&hand) {
                 blackjacks.push(i + 1);
             }
         }
@@ -85,40 +85,26 @@ impl Game {
         }
 
         let len = blackjacks.len();
-        if len != 0 {
-            let key_val;
-            let dealer_jack = blackjacks.contains(&0);
+        let dealer_jack = blackjacks.contains(&0);
 
-            if dealer_jack && len == 1 {    // only dealer blackjack
+        if dealer_jack && len == 1 {    // only dealer blackjack
 
-                println!("Dealer got blackjack. Player loses all hands.");
-                key_val = 0.;
+            println!("Dealer got blackjack. Player loses all hands.");
 
-            } else if dealer_jack {         // both dealer and player blackjack
+        } else if dealer_jack {         // both dealer and player blackjack
 
-                blackjacks.remove(0);
-                if len == 2 {
-                    println!("Both Player and Dealer got blackjack. Player regains bet for hand {}.", format_vec_string(&blackjacks));
-                } else {
-                    println!("Both Player and Dealer got blackjack. Player regains bet for hands {}.", format_vec_string(&blackjacks));
-                }
-                key_val = len as f32;
-
-            } else {                        // only player blackjack
-
-                if len == 1 {
-                    println!("Player got blackjack. Player gains 1.5x bet for hand {}.", format_vec_string(&blackjacks));
-                } else {
-                    println!("Player got blackjack. Player gains 1.5x bet for hands {}.", format_vec_string(&blackjacks));
-                }
-                key_val = (len as f32) * 1.5;
-
+            blackjacks.remove(0);
+            if len == 2 {
+                println!("Both Player and Dealer got blackjack. Player regains bet for hand {}.", format_vec_string(&blackjacks));
+            } else {
+                println!("Both Player and Dealer got blackjack. Player regains bet for hands {}.", format_vec_string(&blackjacks));
             }
 
-            return (true, key_val);
+        } else {
+            return (false, 0);
         }
 
-        return (false, 0.);
+        return (true, len - 1);
     }
 
     fn run_player_turns(&mut self, from: usize) {
@@ -132,6 +118,11 @@ impl Game {
         for (i, hand) in iter {
             loop {
                 println!("[2JHand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value()));
+
+                if Game::is_blackjack(&hand) {
+                    input!("Hand is blackjack. Standing.\nEnter to continue...");
+                    break;
+                }
 
                 let mut input;
                 let splittable = hand.is_splittable();
@@ -179,7 +170,7 @@ impl Game {
         }
     }
 
-    fn check_wins(&self) -> usize {
+    fn check_wins(&self) -> f32 {
         print!("[2J");
 
         let dealer_val = self.dealer.filter_value();
@@ -199,11 +190,19 @@ impl Game {
             println!("Dealer scored {}, you won on {} hands:", dealer_max, winning.len());
         }
 
-        let wins = winning.len();
+        let payouts: Vec<f32> = winning.iter().map(|hand| { if Game::is_blackjack(hand.1) { 1.5 } else { 2. }} ).collect();
         for (i, hand) in winning {
             println!("Hand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value()));
         }
 
-        wins * 2
+        payouts.iter().sum()
+    }
+
+    fn is_blackjack(hand: &Hand) -> bool {
+        if hand.size() != 2 {
+            return false;
+        }
+
+        return hand.filter_value().contains(&21);
     }
 }

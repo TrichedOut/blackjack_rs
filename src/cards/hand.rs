@@ -75,6 +75,10 @@ impl Hand {
             _ => return false,
         }
     }
+
+    pub fn size(&self) -> usize {
+        self.cards.len()
+    }
 }
 
 impl Display for Hand {
