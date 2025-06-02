@@ -62,6 +62,7 @@ impl Game {
 
         for hand in self.hands.iter_mut() {
             self.deck.discard_hand(hand);
+            hand.set_doubled(false);
         }
         self.deck.discard_hand(&mut self.dealer);
 
@@ -71,12 +72,12 @@ impl Game {
     fn dealer_blackjack(&self) -> (bool, usize) {
         let mut blackjacks = Vec::new();
 
-        if Game::is_blackjack(&self.dealer) {
+        if self.dealer.is_blackjack() {
             blackjacks.push(0);
         }
 
         for (i, hand) in self.hands.iter().enumerate() {
-            if Game::is_blackjack(&hand) {
+            if hand.is_blackjack() {
                 blackjacks.push(i + 1);
             }
         }
@@ -109,7 +110,7 @@ impl Game {
         return (true, len - 1);
     }
 
-    fn run_player_turns(&mut self, spare_hands: usize, from: usize) -> usize {
+    fn run_player_turns(&mut self, mut spare_hands: usize, from: usize) -> usize {
         let mut last_input = String::from("x");
 
         let mut iter = self.hands.iter_mut().enumerate();
@@ -119,9 +120,9 @@ impl Game {
 
         for (i, hand) in iter {
             loop {
-                println!("[2JHand {} (you have {} splits/doubs): {} ; ({})", i + 1, spare_hands, hand, format_vec_string(&hand.filter_value()));
+                println!("[2JHand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value()));
 
-                if Game::is_blackjack(&hand) {
+                if hand.is_blackjack() {
                     input!("Hand is blackjack. Standing.\nEnter to continue...");
                     break;
                 }
@@ -129,8 +130,8 @@ impl Game {
                 let mut input;
                 let splittable = hand.is_splittable();
                 match splittable {
-                    true => input = input!("[H]it\n[S]tand\nsp[L]it\n:: "),
-                    false => input = input!("[H]it\n[S]tand\n:: "),
+                    true => input = input!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: "),
+                    false => input = input!("[H]it\n[S]tand\n[D]ouble\n:: "),
                 }
 
                 match input {
@@ -139,8 +140,24 @@ impl Game {
                 }
 
                 match input {
-                    _ if input == "H" || input == "h" => hand.draw_from(&mut self.deck),
+                    _ if input == "H" || input == "h" => {
+                        hand.draw_from(&mut self.deck);
+                    },
                     _ if input == "S" || input == "s" => break,
+                    _ if input == "D" || input == "d" => {
+                        spare_hands -= 1;
+                        let drawn = hand.draw_from(&mut self.deck);
+                        hand.set_doubled(true);
+                        match hand.is_busted() {
+                            true  => {
+                                input!("[2JYou drew {}, busting your hand:\n{} ; ({})\n\nEnter to continue...", drawn, hand, format_vec_string(&hand.value()));
+                            },
+                            false  => {
+                                input!("[2JYou drew {}. Your hand is now:\n{} ; ({})\n\nEnter to continue...", drawn, hand, format_vec_string(&hand.filter_value()));
+                            },
+                        }
+                        break;
+                    }
                     _ if input == "L" || input == "l" && splittable => return self.split_hand(spare_hands, i),
                     _ => {}
                 }
@@ -177,17 +194,15 @@ impl Game {
     fn check_wins(&self) -> f32 {
         print!("[2J");
 
-        let dealer_val = self.dealer.filter_value();
-        let dealer_max = dealer_val.iter().max().unwrap_or(&0);
+        let dealer_max = self.dealer.true_value();
         let winning: Vec<(usize, &Hand)> = 
             self.hands.iter()
             .enumerate()
-            .filter(|hand| !hand.1.filter_value().is_empty())
-            .filter(|hand| hand.1.filter_value().iter().max().unwrap_or(&0) > dealer_max)
+            .filter(|hand| hand.1.true_value() > dealer_max)
             .collect();
 
         println!("Dealer: {} ; ({})", self.dealer, format_vec_string(&self.dealer.value()));
-        if dealer_val.is_empty() {
+        if self.dealer.is_busted() {
             println!("Dealer busted. All non-busted hands win:");
         } else if winning.is_empty() {
             println!("Dealer scored {}, you lost on all hands.", dealer_max);
@@ -195,20 +210,20 @@ impl Game {
             println!("Dealer scored {}, you won on {} hands:", dealer_max, winning.len());
         }
 
-        let payouts: Vec<f32> = winning.iter().map(|hand| { if Game::is_blackjack(hand.1) { 1.5 } else { 2. }} ).collect();
+        let payouts: Vec<f32> = winning.iter().map(|hand| {
+            if hand.1.is_blackjack() {
+                1.5
+            } else if hand.1.is_doubled() {
+                4.0
+            } else {
+                2.0
+            }
+        }).collect();
 
         for (i, hand) in winning {
             println!("Hand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value()));
         }
 
         payouts.iter().sum()
-    }
-
-    fn is_blackjack(hand: &Hand) -> bool {
-        if hand.size() != 2 {
-            return false;
-        }
-
-        return hand.filter_value().contains(&21);
     }
 }

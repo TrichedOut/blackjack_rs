@@ -2,5 +2,5 @@
 - [x] allow player blackjack to continue play for other hands
 - [x] show dealer hand on score screen
 - [x] split costs bet
-- [ ] double down
+- [x] double down
 - [ ] save bal & resets in file
