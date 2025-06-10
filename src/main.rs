@@ -7,14 +7,19 @@ use game::gamestate::GameState;
 use prompted::input;
 
 
+/**
+ * Print main menu
+ */
 fn print_menu() {
     println!("[2J--Rust Blackjack--\n1. Play Game\n2. Exit");
 }
 
 fn main() {
+    // get new gamestate
     let mut input;
     let mut gamestate = GameState::new();
     
+    // simple input loop to play or exit
     loop {
         print_menu();
         input = input!(":: ");
