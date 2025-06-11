@@ -3,5 +3,7 @@
 - [x] show dealer hand on score screen
 - [x] split costs bet
 - [x] double down
-- [ ] prevent buying hand if cannot afford (dd/split)
-- [ ] save bal & resets in file
+- [x] prevent buying hand if cannot afford (dd/split)
+- [x] save bal & resets in file
+- [ ] play last used settings in main
+- [ ] see resets & reset in main

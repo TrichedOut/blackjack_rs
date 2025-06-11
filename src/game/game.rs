@@ -186,9 +186,11 @@ impl Game {
                 // show available moves, get input
                 let mut input;
                 let splittable = hand.is_splittable();
-                match splittable {
-                    true => input = input!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: "),
-                    false => input = input!("[H]it\n[S]tand\n[D]ouble\n:: "),
+                let buyable = spare_hands > 0;
+                match (splittable, buyable) {
+                    ( true,  true) => input = input!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: "),
+                    (false,  true) => input = input!("[H]it\n[S]tand\n[D]ouble\n:: "),
+                    ( ____, false) => input = input!("[H]it\n[S]tand\n:: "),
                 }
 
                 // if player just pressed 'enter', use previous move.
@@ -207,7 +209,7 @@ impl Game {
                     // split
                     _ if input == "S" || input == "s" => break,
                     // double
-                    _ if input == "D" || input == "d" => {
+                    _ if (input == "D" || input == "d") && buyable => {
                         // consume a spare hand, draw a card, set doubled
                         spare_hands -= 1;
                         let drawn = hand.draw_from(&mut self.deck);
@@ -226,7 +228,7 @@ impl Game {
                         break;
                     }
                     // split
-                    _ if input == "L" || input == "l" && splittable => return self.split_hand(spare_hands, i),
+                    _ if (input == "L" || input == "l") && splittable && buyable => return self.split_hand(spare_hands, i),
                     // invalid
                     _ => {}
                 }

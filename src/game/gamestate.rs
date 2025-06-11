@@ -1,8 +1,11 @@
+use std::{fs::File, io::{Read, Write}};
+use serde::{Serialize, Deserialize};
 use prompted::input;
 
 use super::{game::Game, settings::{GameBank, GameSettings}};
 
 // settings and state for the game
+#[derive(Serialize, Deserialize)]
 pub struct GameState {
     settings: Option<GameSettings>,
     bank: GameBank,
@@ -215,5 +218,63 @@ impl GameState {
             self.reset_balance();
             input!("[2JYou ran out of money... You've now reset {} times.\n\nEnter to continue...", self.bank.resets);
         }
+    }
+
+    /**
+     * Save the current gamestate to a save file
+     */
+    pub fn save_state(self) -> Result<(), &'static str> {
+        // create / clear the save file
+        let mut file;
+        match File::create("save.bjrs") {
+            Ok(f) => file = f,
+            _ => return Err("Could not open save file, did not save."),
+        }
+
+        // convert self into json
+        let json;
+        match serde_json::to_string(&self) {
+            Ok(js) => json = js,
+            Err(_) => return Err("Could not convert to json")
+        }
+
+        // write the json to save file
+        match file.write(json.as_bytes()) {
+            Ok(_) =>  return Ok(()),
+            Err(_) => return Err("Could not write to file"),
+        }
+    }
+
+    /**
+     * Load a new state from the save file
+     */
+    pub fn load_state(&mut self) -> Result<(), &'static str> {
+        // open the save file
+        let mut file;
+        match File::open("save.bjrs") {
+            Ok(f) => file = f,
+            Err(_) => return Err("Could not open save file"),
+        }
+
+        // read entirety of save file
+        // I would allocate an array of exact size, but that is quite literally
+        // not possible in rust so I'm stuck with this.
+        let mut buf: Vec<u8> = vec![];
+        match file.read_to_end(&mut buf) {
+            Ok(_) => (),
+            Err(_) => return Err("Could not read from save file")
+        }
+
+        // parse the buffer into a GameState
+        let gamestate: GameState;
+        match serde_json::from_slice(&buf) {
+            Ok(gs) => gamestate = gs,
+            Err(_) => return Err("Could not deserialize the save file")
+        }
+
+        self.settings = gamestate.settings;
+        self.bank = gamestate.bank;
+
+        Ok(())
     }
 }

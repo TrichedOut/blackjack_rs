@@ -18,6 +18,15 @@ fn main() {
     // get new gamestate
     let mut input;
     let mut gamestate = GameState::new();
+
+    // attempt to load save file
+    match gamestate.load_state() {
+        Ok(_)  => (),
+        Err(_) => {
+            input!("Failed to load from save file. generating a new one.\nEnter to continue...");
+            // dont actually need to do anything here
+        },
+    }
     
     // simple input loop to play or exit
     loop {
@@ -26,7 +35,13 @@ fn main() {
 
         match input {
             _ if input == "1" => gamestate.start_game(),
-            _ if input == "2" => exit(0),
+            _ if input == "2" => {
+                match gamestate.save_state() {
+                    Ok(_) => (),
+                    Err(e) => println!("{e}"),
+                }
+                exit(0);
+            }
             _ => (),
         }
     }

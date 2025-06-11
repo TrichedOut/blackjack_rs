@@ -1,6 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 /**
  * Simple game settings, tracking deck and hand counts
  */
+#[derive(Serialize, Deserialize)]
 pub struct GameSettings {
     pub deck_count: usize,
     pub hand_count: usize,
@@ -9,6 +12,7 @@ pub struct GameSettings {
 /**
  * Bank / Money handler. Holds balance, bets, and bank resets
  */
+#[derive(Serialize, Deserialize)]
 pub struct GameBank {
     pub balance: usize,
     pub cur_bet: usize,
