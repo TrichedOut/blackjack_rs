@@ -5,5 +5,6 @@
 - [x] double down
 - [x] prevent buying hand if cannot afford (dd/split)
 - [x] save bal & resets in file
-- [ ] play last used settings in main
-- [ ] see resets & reset in main
+- [x] play last used settings in main
+- [x] see resets & reset in main
+- [ ] style adjustments

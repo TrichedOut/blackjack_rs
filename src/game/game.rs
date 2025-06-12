@@ -270,8 +270,12 @@ impl Game {
      * Plays by hitting until >=17
      */
     fn run_dealer_turn(&mut self) {
-        while self.dealer.true_value() < 17 {
+        // calc value once per iteration.
+        // value is only 0 if busted
+        let mut value = self.dealer.true_value();
+        while value < 17 && value != 0 {
             self.dealer.draw_from(&mut self.deck);
+            value = self.dealer.true_value();
         }
     }
 
