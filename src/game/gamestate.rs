@@ -1,6 +1,8 @@
-use std::{fs::File, io::{Read, Write}};
+use std::{cmp, fs::File, io::{Read, Write}};
 use serde::{Serialize, Deserialize};
 use prompted::input;
+
+use crate::util::input::{read_one_char, validated_input};
 
 use super::{game::Game, settings::GameSettings, bank::GameBank};
 
@@ -23,8 +25,13 @@ impl GameState {
         }
     }
 
-    pub fn has_settings(&self) -> bool {
-        self.settings.is_some()
+    pub fn can_start(&self) -> bool {
+        match &self.settings {
+            Some(s) => {
+                s.hand_count * self.bank.cur_bet <= self.bank.get_balance()
+            },
+            None => false,
+        }
     }
 
     /**
@@ -32,20 +39,17 @@ impl GameState {
      * Used if no games currently exist, typically coming from the main menu
      */
     pub fn start_game(&mut self) {
-        // ensure the balance is >=50
-        self.ensure_balance();
-
-        // ensure settings exist, if they dont, back out
-        let settings;
-        match &self.settings {
-            Some(s) => {
-                settings = s;
-            },
-            None    => return,
+        // ensure the game can start
+        if !self.can_start() {
+            return;
         }
+        let settings = match &self.settings {
+            Some(s) => s,
+            None    => return,
+        };
 
         // make a new game from the settings
-        let mut game = Game::new(&settings);
+        let mut game = Game::new(settings);
 
         // play the game
         self.play_game(&mut game);
@@ -53,7 +57,9 @@ impl GameState {
         // loop until player exits
         loop {
             // if there are no settings here, fail hard. this should not be 
-            // possible
+            // possible. 
+            // dont ask why this is needed. I dont know. something about
+            // immutable borrowing
             let settings = match &self.settings {
                 Some(s) => s,
                 None    => panic!("No settings present in GameState::start_game."),
@@ -63,24 +69,24 @@ impl GameState {
             let again_cost = self.bank.cur_bet * settings.hand_count;
             let again_bal = self.bank.get_balance() as i32 - again_cost as i32;
             let can_again = again_bal >= 0;
-            let again;
 
             // display the play again menu based on balance. get input
             if can_again {
-                again = input!(
+                print!(
                     "[2JYou now have ${}\nIt costs ${} to play {} more hands\nYou will be left with ${}\n\n1. Play Again\n2. Change Settings\n3. Main Menu\n:: ",
                     self.bank.get_balance(), again_cost, settings.hand_count, again_bal
                 );
             } else {
-                again = input!(
+                print!(
                     "[2JYou now have ${}\nIt costs ${} to play {} more hands.\nYou do not have enough to play again, please change settings or incur a balance reset.\n\n1. Reset Balance\n2. Change Settings\n3. Main Menu\n:: ",
                     self.bank.get_balance(), again_cost, settings.hand_count
                 );
-            }
+            };
+            let again = validated_input(|c| '1' <= c && c <= '3', |inp| 1 <= inp && inp <= 3);
 
             match again {
                 // play again
-                _ if again == "1" => {
+                1 => {
                     // play game or reset balance; reflected from display
                     if can_again {
                         self.play_game(&mut game);
@@ -93,7 +99,7 @@ impl GameState {
                     }
                 },
                 // new settings
-                _ if again == "2" => {
+                2 => {
                     // get new settings
                     self.new_settings();
 
@@ -107,7 +113,7 @@ impl GameState {
                     }
                 } 
                 // back to main menu
-                _ if again == "3" => return,
+                3 => return,
                 // reloop
                 _ => (),
             }
@@ -142,6 +148,8 @@ impl GameState {
         } else {
             input!("\nYou won back ${}\nYou now have ${}\n\nEnter to continue...", self.bank.win(wins), self.bank.get_balance());
         }
+
+        _ = self.save_state();
     }
 
     /**
@@ -149,46 +157,49 @@ impl GameState {
      * Is set to `None` if backed out at the end
      */
     pub fn new_settings(&mut self) {
-        let mut deck_count = 0;
-        let mut hand_count = 0;
-        let mut bet_amount = 0;
+        // if there is not enough money to buy at least 1 hand, attempt a reset
+        if self.bank.get_balance() < 50 {
+            print!("\n[2JYou do not have enough money to buy any hands. Reset your balance? [y/n]\n:: ");
+            loop {
+                match read_one_char() {
+                    'y' => {
+                        self.bank.reset_balance();
+                        break;
+                    },
+                    'n' => return,
+                     _  => return, // shouldnt be here
+                }
+            }
+        }
+
+        // calc max hands based on balance, or 7
+        let max_hands = cmp::min(self.bank.get_balance() / 50, 7);
 
         // get the deck count. 1 <= x <= 16
-        while deck_count == 0 
-            || deck_count > 16 {
-
-            deck_count = input!("[2JYou have ${}.\n\nDecks to use (1-16):\nHands to play (1-7):\nAmount to bet (>=$50): $\n[3A[21C", self.bank.get_balance()).parse().unwrap_or(0);
-        }
+        print!("\n[2JYou have ${}.\n\nDecks to use (1-16):\nHands to play (1-{}):\nAmount to bet (>=$50): $\n[3A[21C", self.bank.get_balance(), max_hands);
+        let deck_count = validated_input(|c| c >= '0' && c <= '9', |deck| deck != 0 && deck <= 16);
 
         // get the hand count. checks for valid amount based on balance.
         // 1 <= x <= 7
-        while hand_count == 0 
-            || hand_count > 7
-            || hand_count * 50 > self.bank.get_balance() {
-
-            hand_count = input!("Hands to play (1-7):\nAmount to bet (>=$50): $\n[2F[21C[0K").parse().unwrap_or(0);
-            print!("[1A");
-        }
+        print!("\nHands to play (1-{}):\nAmount to bet (>=$50): $\n[2F[21C[0K", max_hands);
+        let hand_count = validated_input(|c| c >= '0' && c <= '9', |hand| hand != 0 && hand <= max_hands);
 
         // get bet. min val 50
-        print!("[1B");
-        while bet_amount < 50 
-            || bet_amount * hand_count > self.bank.get_balance() {
-
-            bet_amount = input!("Amount to bet (>=$50): $\n[1F[24C[0K").parse().unwrap_or(0);
-            print!("[1A")
-        }
+        print!("\n[1A[1BAmount to bet (>=$50): $\n[1F[24C[0K");
+        let bet_amount = validated_input(|c| c >= '0' && c <= '9', |bet| bet >= 50 && bet * hand_count <= self.bank.get_balance());
+        println!("[1A");
 
         // confirm settings. in loop in case of invalid input
         loop {
             // display confirmation info
             let play_cost = hand_count * bet_amount;
-            let input = input!("[2JBalance remaining after start: ${}\nPlaying with:\n{} decks,\n{} hands at ${} each (${}).\n\n1. Confirm\n2. Cancel\n:: ",
-            self.bank.get_balance() - play_cost, deck_count, hand_count, bet_amount, play_cost);
+            print!("[2JBalance remaining after start: ${}\nPlaying with:\n{} decks,\n{} hands at ${} each (${}).\n\n1. Confirm\n2. Cancel\n:: ",
+                self.bank.get_balance() - play_cost, deck_count, hand_count, bet_amount, play_cost);
+            let input = validated_input(|c| c == '1' || c == '2', |inp| inp == 1 || inp == 2);
 
             match input {
                 // confirm; create settings
-                _ if input == "1" => {
+                1 => {
                     self.settings = Some(GameSettings {
                         deck_count,
                         hand_count,
@@ -197,7 +208,7 @@ impl GameState {
                     return;
                 },
                 // cancel; set to None
-                _ if input == "2" => {
+                2 => {
                     self.settings = None;
                     return;
                 },
@@ -208,38 +219,25 @@ impl GameState {
     }
 
     /**
-     * Ensure balance is >=50. 
-     * If balance is <50, reset balance and let player know
-     */
-    fn ensure_balance(&mut self) {
-        if self.bank.get_balance() < 50 {
-            self.bank.reset_balance();
-            input!("[2JYou ran out of money... You've now reset {} times.\n\nEnter to continue...", self.bank.get_resets());
-        }
-    }
-
-    /**
      * Save the current gamestate to a save file
      */
-    pub fn save_state(self) -> Result<(), &'static str> {
+    pub fn save_state(&self) -> Result<(), &'static str> {
         // create / clear the save file
-        let mut file;
-        match File::create("save.bjrs") {
-            Ok(f) => file = f,
-            _ => return Err("Could not open save file, did not save."),
-        }
+        let mut file = match File::create("save.bjrs") {
+            Ok(f) => f,
+            _     => return Err("Could not open save file, did not save."),
+        };
 
         // convert self into json
-        let json;
-        match serde_json::to_string(&self) {
-            Ok(js) => json = js,
+        let json = match serde_json::to_string(&self) {
+            Ok(js) => js,
             Err(_) => return Err("Could not convert to json")
-        }
+        };
 
         // write the json to save file
         match file.write(json.as_bytes()) {
-            Ok(_) =>  return Ok(()),
-            Err(_) => return Err("Could not write to file"),
+            Ok(_) =>  Ok(()),
+            Err(_) => Err("Could not write to file"),
         }
     }
 
@@ -248,28 +246,24 @@ impl GameState {
      */
     pub fn load_state() -> Result<GameState, &'static str> {
         // open the save file
-        let mut file;
-        match File::open("save.bjrs") {
-            Ok(f) => file = f,
+        let mut file = match File::open("save.bjrs") {
+            Ok(f)  => f,
             Err(_) => return Err("Could not open save file"),
-        }
+        };
 
         // read entirety of save file
         // I would allocate an array of exact size, but that is quite literally
         // not possible in rust so I'm stuck with this.
         let mut buf: Vec<u8> = vec![];
         match file.read_to_end(&mut buf) {
-            Ok(_) => (),
-            Err(_) => return Err("Could not read from save file")
+            Ok(_)  => (),
+            Err(_) => return Err("Could not read from save file"),
         }
 
         // parse the buffer into a GameState
-        let gamestate: GameState;
         match serde_json::from_slice(&buf) {
-            Ok(gs) => gamestate = gs,
+            Ok(gs) => Ok(gs),
             Err(_) => return Err("Could not deserialize the save file")
         }
-
-        Ok(gamestate)
     }
 }

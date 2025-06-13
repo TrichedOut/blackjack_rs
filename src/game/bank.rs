@@ -35,7 +35,7 @@ pub struct BankHistory {
 pub struct Transaction {
     pub amount: usize,
     pub typ: TransactionType,
-    pub trans_bal: usize,
+    pub balance: usize,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -128,7 +128,7 @@ impl GameBank {
             let visible = &elements[pos..end];
 
             // print transactions and title
-            println!("[2JTransaction History (h for help):");
+            println!("\n[2JTransaction History (h for help):");
             let mut ndx = pos;
             for transaction in visible {
                 ndx += 1;
@@ -136,7 +136,7 @@ impl GameBank {
             }
 
             // character inputs
-            match read_one_char() as char {
+            match read_one_char() {
                 // quit
                 'q' => break,
                 // scroll down
@@ -178,7 +178,7 @@ impl BankHistory {
         }
 
         // add to list
-        self.recent_transactions.push(Transaction{amount, typ, trans_bal: balance});
+        self.recent_transactions.push(Transaction{amount, typ, balance});
     }
 }
 
@@ -188,15 +188,15 @@ impl Display for Transaction {
             match self.typ {
                 TransactionType::SPEND => {
                     // [RED]-amount[/RED] -> new_bal 
-                    format!("[38;5;196m-${}[0m -> ${}", self.amount, self.trans_bal)
+                    format!("[38;5;196m-${}[0m -> ${}", self.amount, self.balance)
                 },
                 TransactionType::EARN => {
                     // [GREEN]+amount[/GREEN] -> new_bal 
-                    format!("[38;5;40m+${}[0m -> ${}", self.amount, self.trans_bal)
+                    format!("[38;5;40m+${}[0m -> ${}", self.amount, self.balance)
                 },
                 TransactionType::RESET => {
                     // [YELLOW]Bank Reset[/YELLOW] -> new_bal 
-                    format!("[38;5;214mBank Reset[0m -> ${}", self.trans_bal)
+                    format!("[38;5;214mBank Reset[0m -> ${}", self.balance)
                 },
             },
         )

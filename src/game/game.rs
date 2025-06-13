@@ -1,6 +1,6 @@
 use prompted::input;
 
-use crate::{cards::{deck::Deck, hand::Hand}, util::util::format_vec_string};
+use crate::{cards::{deck::Deck, hand::Hand}, util::{input::validated_input, util::format_vec_string}};
 
 use super::settings::GameSettings;
 
@@ -72,20 +72,20 @@ impl Game {
         let remaining_spares;
         // switch on if dealer got blackjack.
         // gets `if blackjack` and `num player blackjacks`
-        match self.dealer_blackjack() {
+        (wins, remaining_spares) = match self.dealer_blackjack() {
             (true, amt) => {
-                wins = amt as f32;
-                remaining_spares = spare_hands;
+                (amt as f32, spare_hands)
             },
             _ => {
                 // run the player turns, tracking bought hands.
                 // `0` means to start at the first hand
-                remaining_spares = self.run_player_turns(spare_hands, 0);
+                let remaining_spares = self.run_player_turns(spare_hands, 0);
+
                 // run the dealer's turn then run win detection and feedback
                 self.run_dealer_turn();
-                wins = self.check_wins() as f32;
+                (self.check_wins() as f32, remaining_spares)
             }
-        }
+        };
 
         // discard all cards in all hands
         for hand in self.hands.iter_mut() {
@@ -95,7 +95,7 @@ impl Game {
         self.deck.discard_hand(&mut self.dealer);
 
         // return the amount of payout, and the amount of bought hands
-        return (wins, spare_hands - remaining_spares)
+        (wins, spare_hands - remaining_spares)
     }
 
     /**
@@ -129,25 +129,25 @@ impl Game {
         // check counts
         let len = blackjacks.len();
         let dealer_jack = blackjacks.contains(&0);
+        match (dealer_jack, len) {
+            (true, 1) => { // only dealer blackjack
+                println!("Dealer got blackjack. Player loses all hands.");
+                (true, 0)
+            },
 
-        if dealer_jack && len == 1 {    // only dealer blackjack
+            (true, _) => { // both dealer and player blackjack
+                blackjacks.remove(0);
+                if len == 2 {
+                    println!("Both Player and Dealer got blackjack. Player regains bet for hand {}.", format_vec_string(&blackjacks));
+                } else {
+                    println!("Both Player and Dealer got blackjack. Player regains bet for hands {}.", format_vec_string(&blackjacks));
+                }
 
-            println!("Dealer got blackjack. Player loses all hands.");
+                (true, len - 1)
+            },
 
-        } else if dealer_jack {         // both dealer and player blackjack
-
-            blackjacks.remove(0);
-            if len == 2 {
-                println!("Both Player and Dealer got blackjack. Player regains bet for hand {}.", format_vec_string(&blackjacks));
-            } else {
-                println!("Both Player and Dealer got blackjack. Player regains bet for hands {}.", format_vec_string(&blackjacks));
-            }
-
-        } else {
-            return (false, 0);
+            (_, _) => (false, 0),
         }
-
-        return (true, len - 1);
     }
 
     /**
@@ -187,11 +187,24 @@ impl Game {
                 let mut input;
                 let splittable = hand.is_splittable();
                 let buyable = spare_hands > 0;
-                match (splittable, buyable) {
-                    ( true,  true) => input = input!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: "),
-                    (false,  true) => input = input!("[H]it\n[S]tand\n[D]ouble\n:: "),
-                    ( ____, false) => input = input!("[H]it\n[S]tand\n:: "),
-                }
+                input = match (splittable, buyable) {
+                    // (true , true ) => input!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: "),
+                    // (false, true ) => input!("[H]it\n[S]tand\n[D]ouble\n:: "),
+                    // (_    , false) => input!("[H]it\n[S]tand\n:: "),
+                    (true , true ) => {
+                        print!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: ");
+                        validated_input(|c| vec!['h', 's', 'd', 'l'].contains(&c), |inp: String| (String::from("hsdl").contains(&inp) && inp.len() == 1) || inp == "")
+                    },
+                    (false, true ) => {
+                        print!("[H]it\n[S]tand\n[D]ouble\n:: ");
+                        validated_input(|c| vec!['h', 's', 'd'].contains(&c), |inp: String| (String::from("hsd").contains(&inp) && inp.len() == 1) || inp == "")
+                    },
+                    (_    , false) => {
+                        print!("[H]it\n[S]tand\n:: ");
+                        validated_input(|c| vec!['h', 's'].contains(&c), |inp: String| (String::from("hsd").contains(&inp) && inp.len() == 1) || inp == "")
+                    },
+                };
+                println!();
 
                 // if player just pressed 'enter', use previous move.
                 // otherwise store move as new previous
@@ -262,7 +275,7 @@ impl Game {
 
         // add the hand, continue playing from current hand
         self.hands.insert(ndx + 1, new_hand);
-        return self.run_player_turns(spare_hands - 1, ndx);
+        self.run_player_turns(spare_hands - 1, ndx)
     }
 
     /**
@@ -294,12 +307,14 @@ impl Game {
             .collect();
 
         // display corresponding header
-        println!("Dealer: {} ; ({})", self.dealer, format_vec_string(&self.dealer.value()));
         if self.dealer.is_busted() {
+            println!("Dealer: {} ; ({})", self.dealer, format_vec_string(&self.dealer.value()));
             println!("Dealer busted. All non-busted hands win:");
         } else if winning.is_empty() {
+            println!("Dealer: {} ; ({})", self.dealer, self.dealer.true_value());
             println!("Dealer scored {}, you lost on all hands.", dealer_max);
         } else {
+            println!("Dealer: {} ; ({})", self.dealer, self.dealer.true_value());
             println!("Dealer scored {}, you won on {} hands:", dealer_max, winning.len());
         }
 

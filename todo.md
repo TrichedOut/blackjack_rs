@@ -7,4 +7,6 @@
 - [x] save bal & resets in file
 - [x] play last used settings in main
 - [x] see resets & reset in main
-- [ ] style adjustments
+- [x] code style adjustments
+- [x] ui/x improvements (visual input validation?)
+- [ ] update read_one_char to use closure for eff

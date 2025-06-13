@@ -31,16 +31,16 @@ impl Hand {
      */
     pub fn draw_from(&mut self, deck: &mut Deck) -> Card {
         // draw a card
-        match deck.draw_pile.draw() {
+        return match deck.draw_pile.draw() {
             Some(c) => {
                 // add the card to hand and return
                 self.cards.push(c);
-                return c;
+                c
             },
             None => {
                 // reshuffle the deck and draw
                 deck.reshuffle();
-                return self.draw_from(deck);
+                self.draw_from(deck)
             },
         }
     }
@@ -146,9 +146,9 @@ impl Hand {
         }
 
         // check that the two values are the same
-        match (self.cards.get(0), self.cards.get(1)) {
-            (Some(a), Some(b)) => return a.val == b.val,
-            _ => return false,
+        return match (self.cards.get(0), self.cards.get(1)) {
+            (Some(a), Some(b)) => a.val == b.val,
+            _ => false,
         }
     }
 
