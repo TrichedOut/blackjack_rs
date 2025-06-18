@@ -117,6 +117,14 @@ impl Hand {
     }
 
     /**
+     * Gets the first card in hand. 
+     * Panics if no cards in hand.
+     */
+    pub fn top_card(&self) -> &Card {
+        self.cards.first().unwrap()
+    }
+
+    /**
      * Returns whether the hand is a blackjack.
      * Is blackjack if and only if there are 2 cards that add to a true value of
      * 21
@@ -131,7 +139,7 @@ impl Hand {
      * than 21
      */
     pub fn is_busted(&self) -> bool {
-        self.value().iter().min().unwrap_or(&22) > &21
+        self.true_value() == 0
     }
 
     /**

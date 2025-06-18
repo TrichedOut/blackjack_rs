@@ -1,6 +1,6 @@
 use prompted::input;
 
-use crate::{cards::{deck::Deck, hand::Hand}, util::{input::validated_input, util::format_vec_string}};
+use crate::{cards::{deck::Deck, hand::Hand}, util::{input::{validated_input}, util::format_vec_string}};
 
 use super::settings::GameSettings;
 
@@ -59,6 +59,9 @@ impl Game {
      * hands are emptied at the end of this function
      */
     pub fn play(&mut self, spare_hands: usize) -> (f32, usize) {
+        // get the current size of the hand. needed to remove hands if split
+        let hand_count = self.hands.len();
+
         // deal two cards to each player and the dealer, one at a 
         // time in a circle
         for _ in 0..2 {
@@ -94,6 +97,11 @@ impl Game {
         }
         self.deck.discard_hand(&mut self.dealer);
 
+        // remove any hands gained from splitting
+        for _ in 0..(self.hands.len() - hand_count) {
+            self.hands.pop();
+        }
+
         // return the amount of payout, and the amount of bought hands
         (wins, spare_hands - remaining_spares)
     }
@@ -121,7 +129,7 @@ impl Game {
         }
 
         // output
-        println!("[2JDealer: {}, {}", self.dealer, format_vec_string(&self.dealer.filter_value()));
+        println!("\n[2JDealer: {}, {}", self.dealer, format_vec_string(&self.dealer.filter_value()));
         for (i, hand) in self.hands.iter().enumerate() {
             println!("{}: {}, {}", i + 1, hand, format_vec_string(&hand.filter_value()));
         }
@@ -156,106 +164,125 @@ impl Game {
      * Returns number of remaining buyable hands
      */
     fn run_player_turns(&mut self, mut spare_hands: usize, from: usize) -> usize {
-        // unusable last inut
-        let mut last_input = String::from("x");
+        let mut last_input = 'x';
+        let mut cl = self.hands.clone();
+        let iter = cl.iter_mut().enumerate().skip(from);
 
-        // consume all previously played hands
-        let mut iter = self.hands.iter_mut().enumerate();
-        for _ in 0..from {
-            iter.next();
-        }
 
-        // play the rest of the hands.
-        for (i, hand) in iter {
-            // play until break conditions are met:
-            // 1) player gets blackjack
-            // 2) player stands
-            // 3) player busts
-            // 4) player doubles down
-            // 5) player splits, though this occurs with a return
+        // for each hand
+        for (n, mut hand) in iter {
+            // keep going until turn ends
             loop {
-                // display current hand
-                println!("[2JHand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value()));
+                // show dealer hand
+                print!("[2J\nDealer Hand: {}, ??\n\nOptions: ", self.dealer.top_card());
 
-                // if blackjack, stand automatically
-                if hand.is_blackjack() {
-                    input!("Hand is blackjack. Standing.\nEnter to continue...");
-                    break;
-                }
-
-                // show available moves, get input
-                let mut input;
+                // check split and buy status
                 let splittable = hand.is_splittable();
                 let buyable = spare_hands > 0;
-                input = match (splittable, buyable) {
-                    // (true , true ) => input!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: "),
-                    // (false, true ) => input!("[H]it\n[S]tand\n[D]ouble\n:: "),
-                    // (_    , false) => input!("[H]it\n[S]tand\n:: "),
-                    (true , true ) => {
-                        print!("[H]it\n[S]tand\n[D]ouble\nsp[L]it\n:: ");
-                        validated_input(|c| vec!['h', 's', 'd', 'l'].contains(&c), |inp: String| (String::from("hsdl").contains(&inp) && inp.len() == 1) || inp == "")
+
+                // get and display hand play options
+                let options = match (splittable, buyable) {
+                    (true, true) => {
+                        println!("[H]it, [S]tand, [D]ouble, sp[L]it");
+                        vec!['h', 's', 'd', 'l', 'H', 'S', 'D', 'L']
                     },
-                    (false, true ) => {
-                        print!("[H]it\n[S]tand\n[D]ouble\n:: ");
-                        validated_input(|c| vec!['h', 's', 'd'].contains(&c), |inp: String| (String::from("hsd").contains(&inp) && inp.len() == 1) || inp == "")
+                    (false, true) => {
+                        println!("[H]it, [S]tand, [D]ouble");
+                        vec!['h', 's', 'd', 'H', 'S', 'D']
                     },
-                    (_    , false) => {
-                        print!("[H]it\n[S]tand\n:: ");
-                        validated_input(|c| vec!['h', 's'].contains(&c), |inp: String| (String::from("hsd").contains(&inp) && inp.len() == 1) || inp == "")
+                    (_, false) => {
+                        println!("[H]it, [S]tand");
+                        vec!['h', 's', 'H', 'S']
                     },
                 };
-                println!();
 
-                // if player just pressed 'enter', use previous move.
-                // otherwise store move as new previous
-                match input {
-                    _ if input == "" => input = last_input.clone(),
-                    _ => last_input = input.clone(),
-                }
-
-                // perform operations
-                match input {
-                    // hit
-                    _ if input == "H" || input == "h" => {
-                        hand.draw_from(&mut self.deck);
-                    },
-                    // split
-                    _ if input == "S" || input == "s" => break,
-                    // double
-                    _ if (input == "D" || input == "d") && buyable => {
-                        // consume a spare hand, draw a card, set doubled
-                        spare_hands -= 1;
-                        let drawn = hand.draw_from(&mut self.deck);
-                        hand.set_doubled(true);
-
-                        // display new hand and if busted
-                        match hand.is_busted() {
-                            true  => {
-                                input!("[2JYou drew {}, busting your hand:\n{} ; ({})\n\nEnter to continue...", drawn, hand, format_vec_string(&hand.value()));
-                            },
-                            false  => {
-                                input!("[2JYou drew {}. Your hand is now:\n{} ; ({})\n\nEnter to continue...", drawn, hand, format_vec_string(&hand.filter_value()));
-                            },
-                        }
-                        // go to next hand
-                        break;
+                // display all hands, revealing that which has been played
+                let mut out = String::new();
+                for (i, hand) in self.hands.iter().enumerate() {
+                    match (i < n, i == n) {
+                        (true , false) => {
+                            match hand.is_busted() {
+                                true  => println!("Hand {}: {} ; ({}, busted)", i + 1, hand, format_vec_string(&hand.value())),
+                                false => println!("Hand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value())),
+                            }
+                        },
+                        (false, true) => {
+                            out = format!("Hand {}: {} ; ({}) <- ", i + 1, hand, format_vec_string(&hand.filter_value()));
+                            println!()
+                        },
+                        (_    , _    ) => println!("Hand {}: {}, ??", i + 1, hand.top_card()),
                     }
-                    // split
-                    _ if (input == "L" || input == "l") && splittable && buyable => return self.split_hand(spare_hands, i),
-                    // invalid
-                    _ => {}
                 }
 
-                // check for a busted hand
-                if hand.filter_value().is_empty() {
-                    println!("[2JHand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.value()));
-                    input!("Hand has busted. Enter to continue...");
+                // move cursor to correct hand pos
+                let v_shift = self.hands.len() - n;
+                print!("[{}A{out}", v_shift);
+
+                // handle input
+                let (to_break, bought) = match validated_input(|c| options.contains(&c), |s: String| s.len() <= 1) {
+                    input if input.len() == 0 => {
+                        self.handle_play_input(&mut hand, last_input)
+                    },
+                    input => {
+                        last_input = input.chars().nth(0).unwrap();
+                        self.handle_play_input(&mut hand, last_input)
+                    },
+                };
+                self.hands[n] = hand.clone();
+
+                match (to_break, bought) {
+                    (true, true) => {
+                        spare_hands -= 1;
+                        break
+                    },
+                    (true, false) => break,
+                    (false, true) => {
+                        spare_hands -= 1;
+                        return self.split_hand(spare_hands, n)
+                    },
+                    (false, false) => (),
+                }
+                if bought {
+                    spare_hands -= 1;
+                }
+
+                if hand.is_busted() {
                     break;
                 }
             }
         }
 
+        // show state before moving on
+        print!("[2J\nDealer Hand: {}, ??\n\n\n", self.dealer.top_card());
+        for (i, hand) in self.hands.iter().enumerate() {
+            match hand.is_busted() {
+                true  => println!("Hand {}: {} ; ({}, busted)", i + 1, hand, format_vec_string(&hand.value())),
+                false => println!("Hand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value())),
+            }
+        }
+        input!("Moving to dealer's turn. Enter to continue...");
+
         spare_hands
+    }
+
+    /**
+     * Handle input during play
+     */
+    fn handle_play_input(&mut self, hand: &mut Hand, c: char) -> (bool, bool) {
+        match c {
+            'h' | 'H' => {
+                hand.draw_from(&mut self.deck);
+                (false, false)
+            },
+            's' | 'S' => (true, false),
+            'd' | 'D' => {
+                hand.draw_from(&mut self.deck);
+                hand.set_doubled(true);
+                (true, true)
+            },
+            'l' | 'L' => (false, true),
+            _ => (false, false),
+        }
     }
 
     /**
@@ -275,7 +302,7 @@ impl Game {
 
         // add the hand, continue playing from current hand
         self.hands.insert(ndx + 1, new_hand);
-        self.run_player_turns(spare_hands - 1, ndx)
+        self.run_player_turns(spare_hands, ndx)
     }
 
     /**
@@ -296,33 +323,38 @@ impl Game {
      * Check win count and calculate payout scalar.
      */
     fn check_wins(&self) -> f32 {
-        print!("[2J");
+        print!("[1E[2J");
 
         // get the dealer's hand value, get hands that beat the dealer
         let dealer_max = self.dealer.true_value();
-        let winning: Vec<(usize, &Hand)> = 
+        let winning_hands: Vec<&Hand> = 
+            self.hands.iter()
+            .filter(|hand| hand.true_value() > dealer_max)
+            .collect();
+        let winning_ndxs: Vec<usize> = 
             self.hands.iter()
             .enumerate()
-            .filter(|hand| hand.1.true_value() > dealer_max)
+            .filter(|enume| enume.1.true_value() > dealer_max)
+            .map(|enume| enume.0)
             .collect();
 
         // display corresponding header
         if self.dealer.is_busted() {
-            println!("Dealer: {} ; ({})", self.dealer, format_vec_string(&self.dealer.value()));
+            println!("Dealer: {} ; ({})\n", self.dealer, format_vec_string(&self.dealer.value()));
             println!("Dealer busted. All non-busted hands win:");
-        } else if winning.is_empty() {
-            println!("Dealer: {} ; ({})", self.dealer, self.dealer.true_value());
+        } else if winning_hands.is_empty() {
+            println!("Dealer: {} ; ({})\n", self.dealer, self.dealer.true_value());
             println!("Dealer scored {}, you lost on all hands.", dealer_max);
         } else {
-            println!("Dealer: {} ; ({})", self.dealer, self.dealer.true_value());
-            println!("Dealer scored {}, you won on {} hands:", dealer_max, winning.len());
+            println!("Dealer: {} ; ({})\n", self.dealer, self.dealer.true_value());
+            println!("Dealer scored {}, you won on {} hands:", dealer_max, winning_hands.len());
         }
 
         // take each hand that beat the dealer and convert it to its win amount
-        let payouts: Vec<f32> = winning.iter().map(|hand| {
-            if hand.1.is_blackjack() { // blackjacks get 1.5x bet
+        let payouts: Vec<f32> = winning_hands.iter().map(|hand| {
+            if hand.is_blackjack() { // blackjacks get 1.5x bet
                 1.5
-            } else if hand.1.is_doubled() { // doubles get 4x bet
+            } else if hand.is_doubled() { // doubles get 4x bet
                 4.0
             } else { // standard hands get 2x bet
                 2.0
@@ -330,8 +362,14 @@ impl Game {
         }).collect();
 
         // print all winning hands
-        for (i, hand) in winning {
-            println!("Hand {}: {} ; ({})", i + 1, hand, format_vec_string(&hand.filter_value()));
+        for (i, hand) in self.hands.iter().enumerate() {
+            match (winning_ndxs.contains(&i), hand.is_blackjack(), hand.is_doubled(), hand.is_busted()) {
+                (true, true, false, false)  => println!("Hand {}: {} ; ({}) [38;5;220m[Blackjack][0m", i + 1, hand, hand.true_value()),
+                (true, false, true, false)  => println!("Hand {}: {} ; ({}) [38;5;40m[Win][38;5;220m[x2][0m", i + 1, hand, hand.true_value()),
+                (true, false, false, false) => println!("Hand {}: {} ; ({}) [38;5;40m[Win][0m", i + 1, hand, hand.true_value()),
+                (false, false, false, true) => println!("Hand {}: {} ; ({}) [38;5;196m[Busted][0m", i + 1, hand, format_vec_string(&hand.value())),
+                (_, _, _, _)                => println!("Hand {}: {} ; ({}) [38;5;196m[Lost][0m", i + 1, hand, format_vec_string(&hand.value())),
+            }
         }
 
         // sum the payouts and return

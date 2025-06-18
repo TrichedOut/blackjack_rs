@@ -9,4 +9,4 @@
 - [x] see resets & reset in main
 - [x] code style adjustments
 - [x] ui/x improvements (visual input validation?)
-- [ ] update read_one_char to use closure for eff
+- [x] better lose screen
