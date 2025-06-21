@@ -329,18 +329,18 @@ impl Game {
         let dealer_max = self.dealer.true_value();
         let winning_hands: Vec<&Hand> = 
             self.hands.iter()
-            .filter(|hand| hand.true_value() > dealer_max)
+            .filter(|hand| hand.true_value() > dealer_max || hand.is_blackjack())
             .collect();
         let winning_ndxs: Vec<usize> = 
             self.hands.iter()
             .enumerate()
-            .filter(|enume| enume.1.true_value() > dealer_max)
+            .filter(|enume| enume.1.true_value() > dealer_max || enume.1.is_blackjack())
             .map(|enume| enume.0)
             .collect();
 
         // display corresponding header
         if self.dealer.is_busted() {
-            println!("Dealer: {} ; ({})\n", self.dealer, format_vec_string(&self.dealer.value()));
+            println!("Dealer: {} ; ({}) [38;5;196m[Busted][0m\n", self.dealer, format_vec_string(&self.dealer.value()));
             println!("Dealer busted. All non-busted hands win:");
         } else if winning_hands.is_empty() {
             println!("Dealer: {} ; ({})\n", self.dealer, self.dealer.true_value());
